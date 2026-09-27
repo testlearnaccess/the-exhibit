@@ -80,8 +80,8 @@ export function wordCount(text: string) {
   return text.trim() ? text.trim().split(/\s+/).length : 0;
 }
 
-export function monthsSince(iso?: string) {
-  if (!iso) return null | undefined;
+export function monthsSince(iso?: string | undefined) {
+  if (!iso) return null;
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return null;
   return Math.floor((Date.now() - then) / (1000 * 60 * 60 * 24 * 30.44));
