@@ -9,9 +9,11 @@ import {
   type ProfileSection,
 } from "@/lib/newsletter/types";
 
-const structuredHeaders: Record<string, [string, string, string]> = {
-  default: ["Day / date", "Program / event", "Time"],
-};
+const STRUCTURED_HEADERS: [string, string, string] = [
+  "Day / date",
+  "Program / event",
+  "Time",
+];
 
 export function SectionInputBlock({
   block,
@@ -19,7 +21,7 @@ export function SectionInputBlock({
   onChange,
 }: {
   block: InputBlock;
-  meta?: ProfileSection;
+  meta?: ProfileSection | undefined;
   onChange: (next: InputBlock) => void;
 }) {
   const set = (patch: Partial<InputBlock>) => onChange({ ...block, ...patch });
@@ -124,7 +126,7 @@ function StructuredRows({
   onChange: (next: InputBlock) => void;
 }) {
   const rows = block.rows ?? [{ a: "", b: "", c: "" }];
-  const headers = structuredHeaders.default;
+  const headers = STRUCTURED_HEADERS;
   const setRows = (next: typeof rows) => onChange({ ...block, rows: next });
 
   return (
@@ -169,7 +171,7 @@ export function DraftBlock({
   busy,
 }: {
   section: DraftSection;
-  rawInput?: InputBlock;
+  rawInput?: InputBlock | undefined;
   onEdit: (text: string) => void;
   onRegenerate: () => void;
   busy: boolean;

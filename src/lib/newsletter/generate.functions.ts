@@ -88,7 +88,7 @@ async function callModel(instructions: string, input: string) {
 
 function parseJson<T>(text: string): T {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const raw = fenced ? fenced[1] : text;
+  const raw = (fenced ? fenced[1] : text) ?? text;
   const start = raw.indexOf("{");
   const end = raw.lastIndexOf("}");
   if (start === -1 || end === -1) throw new Error("The writing service returned an unreadable draft.");

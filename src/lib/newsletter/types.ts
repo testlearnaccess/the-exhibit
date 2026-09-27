@@ -17,12 +17,12 @@ export type ProfileSection = {
   id: string;
   name: string;
   section_type: SectionType;
-  avg_word_count?: number;
-  tone_notes?: string;
+  avg_word_count?: number | undefined;
+  tone_notes?: string | undefined;
   /** evergreen only: text carried forward each issue */
-  last_content?: string;
+  last_content?: string | undefined;
   /** evergreen only: ISO date it was last edited, for staleness flags */
-  last_updated?: string;
+  last_updated?: string | undefined;
 };
 
 export type StyleProfile = {
@@ -42,26 +42,26 @@ export type InputBlock = {
   section_id: string;
   section_name: string;
   section_type: SectionType;
-  skipped?: boolean;
-  raw_notes?: string;
-  rows?: StructuredRow[];
-  puzzle_text?: string;
-  answer_key_text?: string;
-  caption?: string;
-  photo_note?: string;
-  carried_text?: string;
+  skipped?: boolean | undefined;
+  raw_notes?: string | undefined;
+  rows?: StructuredRow[] | undefined;
+  puzzle_text?: string | undefined;
+  answer_key_text?: string | undefined;
+  caption?: string | undefined;
+  photo_note?: string | undefined;
+  carried_text?: string | undefined;
 };
 
 export type DraftSection = {
   section_id: string;
   section_name: string;
   section_type: SectionType;
-  heading?: string;
+  heading?: string | undefined;
   text: string;
-  answer_key_text?: string;
-  photo_note?: string;
+  answer_key_text?: string | undefined;
+  photo_note?: string | undefined;
   word_count: number;
-  target_word_count?: number;
+  target_word_count?: number | undefined;
 };
 
 export type Issue = {
@@ -81,7 +81,7 @@ export function wordCount(text: string) {
 }
 
 export function monthsSince(iso?: string) {
-  if (!iso) return null;
+  if (!iso) return null | undefined;
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return null;
   return Math.floor((Date.now() - then) / (1000 * 60 * 60 * 24 * 30.44));
