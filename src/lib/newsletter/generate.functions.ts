@@ -228,7 +228,10 @@ export const regenerateSection = createServerFn({ method: "POST" })
     generateInput.extend({ section_id: z.string(), instance_id: z.string().optional() }).parse(data),
   )
   .handler(async ({ data }) => {
-    const text = await callModel(HOUSE_RULES, buildInput(data, data.section_id));
+    const text = await callModel(
+      HOUSE_RULES,
+      buildInput(data, { section_id: data.section_id, instance_id: data.instance_id }),
+    );
     return parseJson<ModelSections>(text).sections;
   });
 
