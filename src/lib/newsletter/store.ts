@@ -29,14 +29,26 @@ export function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-/** Reference profile derived from "The Exhibit" (UL Lafayette Science Museum). */
+/**
+ * Reference profile derived from "The Exhibit" (UL Lafayette Science Museum),
+ * cross-checked against Vol. 8 (2024), Vol. 21 (Apr/May 2026) and Vol. 23
+ * (Aug/Sep 2026). Vol. 21 and 23 agree with each other and diverge from the
+ * older Vol. 8 in several places (see source_notes) — the newer two issues
+ * are weighted as the current format.
+ */
 export function starterProfile(): StyleProfile {
   const now = new Date().toISOString();
   const s = (
     name: string,
     section_type: ProfileSection["section_type"],
     extra: Partial<ProfileSection> = {},
-  ): ProfileSection => ({ id: uid(), name, section_type, ...extra });
+  ): ProfileSection => ({
+    id: uid(),
+    name,
+    section_type,
+    active_by_default: true,
+    ...extra,
+  });
 
   return {
     publication: "The Exhibit",
@@ -44,44 +56,70 @@ export function starterProfile(): StyleProfile {
     tone_summary:
       "Warm but institutional. First-person Letter from the Director, signed with name and university title. Formal calls to action with phone number and email. Plain, unhurried sentences; no exclamation-heavy marketing voice.",
     headline_examples: [
-      "A Month of Light in the Hall",
-      "New in the Planetarium: Skies of Winter",
-      "Curiosity Corner",
+      "Students Bring New Exhibit to Life",
+      "Book Now to Secure Your Fall Field Trip Date",
+      "Gear Up for Summer with Museum Membership",
     ],
-    sign_off:
-      "Warm regards,\n[Director name]\nDirector, UL Lafayette Science Museum",
+    sign_off: "Best Wishes,\n[Director name], Museum Director",
     sections: [
       s("Letter from the Director", "narrative", {
-        avg_word_count: 180,
-        tone_notes: "First person, addressed to “Dear friends of the museum”, ends with the sign-off.",
-      }),
-      s("Feature Story", "narrative", { avg_word_count: 250 }),
-      s("Museum Spotlight", "narrative", { avg_word_count: 150 }),
-      s("Planetarium Showtimes", "structured", {
-        tone_notes: "Day / time / program grid.",
+        avg_word_count: 200,
+        tone_notes:
+          "Opens \"Greetings from UL Lafayette Science Museum,\"; recaps the recent season, thanks the community, looks ahead, ends with the sign-off.",
       }),
       s("Calendar of Events", "structured", {
-        tone_notes: "Date / event / time list.",
+        column_labels: ["Date", "Event"],
+        tone_notes: "4-6 short date/event lines.",
+      }),
+      s("Upcoming Events", "narrative", {
+        avg_word_count: 120,
+        tone_notes:
+          "Prose expansion of the Calendar of Events entries — draft the calendar first, then write this from the same facts.",
+      }),
+      s("Story", "narrative", {
+        avg_word_count: 200,
+        repeatable: true,
+        tone_notes:
+          "Appears 2-4 times per issue: new exhibits, student/staff spotlights, program recaps. Headline + one-line subhead + body.",
+      }),
+      s("In the Planetarium", "template_slot", {
+        template_opener:
+          "The universe awaits in our state-of-the-art, all-digital, full-dome planetarium!",
+        template_closer:
+          "As we work to grow our planetarium staff, The Sky Tonight or an alternate program will be shown depending on staff availability.",
+        tone_notes:
+          "Variable middle names this issue's specific schedule/exceptions around the standing weekly showtimes.",
+      }),
+      s("Field Trip / Membership CTA", "rotating_cta", {
+        avg_word_count: 90,
+        tone_notes:
+          "Subject rotates by season — membership renewal push in spring, field-trip booking in fall. Not verbatim between issues.",
       }),
       s("Curiosity Corner", "paired", {
-        tone_notes: "Puzzle up front, answer key printed on a later page.",
+        active_by_default: false,
+        tone_notes:
+          "Puzzle up front, answer key printed on a later page. Did not appear in Vol. 21 or 23 — occasional, not guaranteed.",
       }),
-      s("Event Promo", "image_anchored", { avg_word_count: 45 }),
-      s("Membership & Pricing", "evergreen", {
+      s("Event Promo", "image_anchored", {
+        avg_word_count: 45,
+        active_by_default: false,
+      }),
+      s("Closing Note", "evergreen", {
         last_content:
-          "Individual membership $35 · Family $60 · Patron $150. Members receive unlimited admission, planetarium seating, and preview invitations.",
+          "These are just a few highlights and updates from UL Lafayette Science Museum. We invite you to visit our website and follow our social media channels for the latest on upcoming events. With your support, we can continue to provide informative and interactive experiences in STEM fields to the community, K-12 and University students, provide innovative research opportunities, and preserve museum collections for use in exhibits, classrooms and scientific research.",
         last_updated: now,
       }),
-      s("Support the Museum", "evergreen", {
+      s("Footer", "evergreen", {
         last_content:
-          "Your gift keeps our exhibits open to every school group in Acadiana. To give, contact me by email or call (337) 482-1000.",
+          "UL Lafayette Science Museum\n433 Jefferson Street\nLafayette, LA 70501\nPhone: 337-291-5544\nEmail: LafayetteScienceMuseum@louisiana.edu",
         last_updated: now,
       }),
     ],
     source_notes: [
-      "Planetarium grid and Curiosity Corner are not prose sections.",
-      "Membership pricing and the donation call-out repeat nearly verbatim; refresh occasionally.",
-      "Several sections are built around a photo with a caption-length block of text.",
+      "Vol. 21 and Vol. 23 agree with each other; Vol. 8 (2024) differs in ways treated as outdated: it used a Planetarium showtime grid (now template_slot) and a fixed Membership/Support pair (now a single rotating_cta).",
+      "Curiosity Corner and a standalone donation call-out appeared in neither Vol. 21 nor Vol. 23 — set inactive by default rather than removed, in case they return seasonally.",
+      "Story count varies issue to issue (2-4 instances) — modeled as one repeatable section rather than fixed named slots.",
+      "Upcoming Events consistently restates the Calendar of Events in prose — draft Calendar first and hand its rows to Upcoming Events as source facts.",
     ],
     updated_at: now,
   };
@@ -148,14 +186,47 @@ export function useIssues() {
   };
 }
 
+/**
+ * Builds the starting Monthly Input blocks for a new issue. Sections marked
+ * active_by_default:false are still included so the editor can see and opt
+ * into them, but callers should render them collapsed/unchecked — skipped
+ * defaults to true for those so a fresh issue doesn't silently draft an
+ * occasional section nobody asked for.
+ */
 export function blocksFromProfile(profile: StyleProfile): InputBlock[] {
-  return profile.sections.map((s) => ({
-    section_id: s.id,
-    section_name: s.name,
-    section_type: s.section_type,
-    rows: s.section_type === "structured" ? [{ a: "", b: "", c: "" }] : undefined,
-    carried_text: s.section_type === "evergreen" ? (s.last_content ?? "") : undefined,
-  }));
+  return profile.sections
+    .filter((s) => !s.repeatable) // repeatable sections start with zero instances; UI adds them on demand
+    .map((s) => ({
+      section_id: s.id,
+      section_name: s.name,
+      section_type: s.section_type,
+      skipped: s.active_by_default === false,
+      rows: s.section_type === "structured" ? [{ date: "", event: "" }] : undefined,
+      carried_text: s.section_type === "evergreen" ? (s.last_content ?? "") : undefined,
+    }));
+}
+
+/** Adds one new instance of a repeatable section (e.g. another "Story") to an issue's input. */
+export function addRepeatableInstance(section: ProfileSection): InputBlock {
+  return {
+    section_id: section.id,
+    instance_id: uid(),
+    section_name: section.name,
+    section_type: section.section_type,
+  };
+}
+
+/**
+ * Prefills the "Upcoming Events" narrative textarea from Calendar of Events
+ * rows, as a starting point the editor can freely rewrite — not a hard
+ * binding. Call this when the calendar block changes, only if the target
+ * block hasn't been hand-edited yet.
+ */
+export function deriveUpcomingEventsSeed(rows: { date: string; event: string }[]): string {
+  return rows
+    .filter((r) => r.date || r.event)
+    .map((r) => `${r.date}: ${r.event}`)
+    .join("\n");
 }
 
 export function newIssue(profile: StyleProfile): Issue {
