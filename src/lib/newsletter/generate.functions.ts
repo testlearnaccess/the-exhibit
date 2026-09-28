@@ -154,10 +154,17 @@ const HOUSE_RULES = `You draft a monthly museum newsletter. Rules:
 Respond with JSON only, shaped:
 {"sections":[{"section_id":"...","instance_id":"optional","heading":"optional short headline","text":"...","answer_key_text":"optional"}]}`;
 
-function buildInput(payload: z.infer<typeof generateInput>, onlySectionId?: string) {
+function buildInput(
+  payload: z.infer<typeof generateInput>,
+  only?: { section_id: string; instance_id?: string | undefined },
+) {
   const { profile, blocks, issue_name } = payload;
   const active = blocks.filter(
-    (b) => !b.skipped && (!onlySectionId || b.section_id === onlySectionId),
+    (b) =>
+      !b.skipped &&
+      (!only ||
+        (b.section_id === only.section_id &&
+          (only.instance_id === undefined || b.instance_id === only.instance_id))),
   );
 
   const sectionBrief = active.map((b) => {
