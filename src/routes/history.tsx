@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { Card, Chip, GhostButton, Shell } from "@/components/newsletter/Shell";
 import { useIssues } from "@/lib/newsletter/store";
+import { blockKey } from "@/lib/newsletter/types";
 
 export const Route = createFileRoute("/history")({
   head: () => ({
@@ -69,7 +70,7 @@ function HistoryPage() {
                     <p className="text-[12px] text-mist">No generated text for this issue yet.</p>
                   )}
                   {issue.draft.map((d) => (
-                    <div key={d.section_id}>
+                    <div key={blockKey(d)}>
                       <p className="label-eyebrow text-accent">{d.section_name}</p>
                       <p className="mt-1 whitespace-pre-line text-[12px] leading-relaxed text-mist">
                         {d.text}
@@ -82,19 +83,20 @@ function HistoryPage() {
                     </summary>
                     <div className="mt-2 space-y-2">
                       {issue.input.map((b) => (
-                        <div key={b.section_id}>
+                        <div key={blockKey(b)}>
                           <p className="text-[11px] text-ink">{b.section_name}</p>
                           <p className="whitespace-pre-line text-[11px] text-mist/80">
                             {[
                               b.raw_notes,
+                              b.variable_text,
                               b.caption,
                               b.photo_note && `Photo needed: ${b.photo_note}`,
                               b.puzzle_text,
                               b.answer_key_text,
                               b.carried_text,
                               b.rows
-                                ?.filter((r) => r.a || r.b || r.c)
-                                .map((r) => `${r.a} — ${r.b} — ${r.c}`)
+                                ?.filter((r) => r.date || r.event)
+                                .map((r) => `${r.date} — ${r.event}`)
                                 .join("\n"),
                               b.skipped ? "Skipped this month" : "",
                             ]
