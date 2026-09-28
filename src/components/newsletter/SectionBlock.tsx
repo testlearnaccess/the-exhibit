@@ -9,20 +9,16 @@ import {
   type ProfileSection,
 } from "@/lib/newsletter/types";
 
-const STRUCTURED_HEADERS: [string, string, string] = [
-  "Day / date",
-  "Program / event",
-  "Time",
-];
-
 export function SectionInputBlock({
   block,
   meta,
   onChange,
+  onRemove,
 }: {
   block: InputBlock;
   meta?: ProfileSection | undefined;
   onChange: (next: InputBlock) => void;
+  onRemove?: (() => void) | undefined;
 }) {
   const set = (patch: Partial<InputBlock>) => onChange({ ...block, ...patch });
   const stale = monthsSince(meta?.last_updated);
@@ -40,19 +36,47 @@ export function SectionInputBlock({
 
       {!block.skipped && (
         <div className="mt-3 space-y-2">
-          {block.section_type === "narrative" && (
+          {(block.section_type === "narrative" || block.section_type === "rotating_cta") && (
             <>
               <Field
                 value={block.raw_notes ?? ""}
                 onChange={(v) => set({ raw_notes: v })}
                 rows={4}
-                placeholder="Rough bullet notes — no formatting needed"
+                placeholder={
+                  block.section_type === "rotating_cta"
+                    ? "This issue's offer — subject, key facts (prices, deadlines, contact)"
+                    : "Rough bullet notes — no formatting needed"
+                }
               />
               {meta?.avg_word_count && (
                 <p className="text-[10px] text-mist">
                   Typical length: {meta.avg_word_count} words
                 </p>
               )}
+            </>
+          )}
+
+          {block.section_type === "template_slot" && (
+            <>
+              {meta?.template_opener && (
+                <p className="rounded-lg bg-canvas/40 px-3 py-2 text-[12px] leading-relaxed text-mist/70 italic">
+                  {meta.template_opener}
+                </p>
+              )}
+              <Field
+                value={block.variable_text ?? ""}
+                onChange={(v) => set({ variable_text: v })}
+                rows={2}
+                placeholder="This issue's variable note (e.g. schedule exceptions)"
+              />
+              {meta?.template_closer && (
+                <p className="rounded-lg bg-canvas/40 px-3 py-2 text-[12px] leading-relaxed text-mist/70 italic">
+                  {meta.template_closer}
+                </p>
+              )}
+              <p className="text-[10px] text-mist">
+                Fixed wording above/below is kept as-is — only the middle note is drafted.
+              </p>
             </>
           )}
 
@@ -104,7 +128,7 @@ export function SectionInputBlock({
           )}
 
           {block.section_type === "structured" && (
-            <StructuredRows block={block} onChange={onChange} />
+            <StructuredRows block={block} meta={meta} onChange={onChange} />
           )}
         </div>
       )}
@@ -113,6 +137,7 @@ export function SectionInputBlock({
         <GhostButton onClick={() => set({ skipped: !block.skipped })}>
           {block.skipped ? "Include this month" : "Skip this month"}
         </GhostButton>
+        {onRemove && <GhostButton onClick={onRemove}>Remove</GhostButton>}
       </div>
     </Card>
   );
@@ -120,18 +145,20 @@ export function SectionInputBlock({
 
 function StructuredRows({
   block,
+  meta,
   onChange,
 }: {
   block: InputBlock;
+  meta?: ProfileSection | undefined;
   onChange: (next: InputBlock) => void;
 }) {
-  const rows = block.rows ?? [{ a: "", b: "", c: "" }];
-  const headers = STRUCTURED_HEADERS;
+  const rows = block.rows ?? [{ date: "", event: "" }];
+  const headers = meta?.column_labels ?? ["Date", "Event"];
   const setRows = (next: typeof rows) => onChange({ ...block, rows: next });
 
   return (
     <div className="space-y-1.5">
-      <div className="grid grid-cols-[1fr_1.4fr_0.8fr] gap-1.5">
+      <div className="grid grid-cols-[0.8fr_1.6fr] gap-1.5">
         {headers.map((h) => (
           <span key={h} className="text-[9px] uppercase tracking-[0.15em] text-mist">
             {h}
@@ -139,8 +166,8 @@ function StructuredRows({
         ))}
       </div>
       {rows.map((row, i) => (
-        <div key={i} className="grid grid-cols-[1fr_1.4fr_0.8fr] gap-1.5">
-          {(["a", "b", "c"] as const).map((k) => (
+        <div key={i} className="grid grid-cols-[0.8fr_1.6fr] gap-1.5">
+          {(["date", "event"] as const).map((k) => (
             <TextInput
               key={k}
               value={row[k]}
@@ -152,7 +179,7 @@ function StructuredRows({
         </div>
       ))}
       <div className="flex gap-2 pt-1">
-        <GhostButton onClick={() => setRows([...rows, { a: "", b: "", c: "" }])}>
+        <GhostButton onClick={() => setRows([...rows, { date: "", event: "" }])}>
           Add row
         </GhostButton>
         {rows.length > 1 && (
@@ -166,12 +193,14 @@ function StructuredRows({
 export function DraftBlock({
   section,
   rawInput,
+  meta,
   onEdit,
   onRegenerate,
   busy,
 }: {
   section: DraftSection;
   rawInput?: InputBlock | undefined;
+  meta?: ProfileSection | undefined;
   onEdit: (text: string) => void;
   onRegenerate: () => void;
   busy: boolean;
@@ -180,13 +209,22 @@ export function DraftBlock({
   const target = section.target_word_count;
   const off = target ? Math.abs(count - target) / target > 0.3 : false;
 
-  const copy = () => navigator.clipboard.writeText(section.text);
+  const copy = () => navigator.clipboard.writeText(assembledText());
+  const assembledText = () =>
+    section.section_type === "template_slot"
+      ? [meta?.template_opener, section.text, meta?.template_closer].filter(Boolean).join("\n\n")
+      : section.text;
+
   const rawSummary = [
     rawInput?.raw_notes,
+    rawInput?.variable_text,
     rawInput?.caption,
     rawInput?.photo_note && `Photo needed: ${rawInput.photo_note}`,
     rawInput?.puzzle_text,
-    rawInput?.rows?.filter((r) => r.a || r.b || r.c).map((r) => `${r.a} — ${r.b} — ${r.c}`).join("\n"),
+    rawInput?.rows
+      ?.filter((r) => r.date || r.event)
+      .map((r) => `${r.date} — ${r.event}`)
+      .join("\n"),
   ]
     .filter(Boolean)
     .join("\n");
@@ -202,12 +240,24 @@ export function DraftBlock({
         <h2 className="font-display mt-2 text-lg leading-tight font-bold">{section.heading}</h2>
       )}
 
+      {section.section_type === "template_slot" && meta?.template_opener && (
+        <p className="mt-2 rounded-lg bg-canvas/40 px-3 py-2 text-[12px] leading-relaxed text-mist/70 italic">
+          {meta.template_opener}
+        </p>
+      )}
+
       <textarea
         value={section.text}
         rows={Math.min(14, Math.max(3, Math.ceil(section.text.length / 60)))}
         onChange={(e) => onEdit(e.target.value)}
         className="mt-2 w-full resize-y rounded-lg bg-canvas/40 px-3 py-2 text-[13px] leading-relaxed text-mist outline-1 -outline-offset-1 outline-input focus:text-ink focus:outline-ring"
       />
+
+      {section.section_type === "template_slot" && meta?.template_closer && (
+        <p className="mt-2 rounded-lg bg-canvas/40 px-3 py-2 text-[12px] leading-relaxed text-mist/70 italic">
+          {meta.template_closer}
+        </p>
+      )}
 
       {section.answer_key_text && (
         <div className="mt-2">
