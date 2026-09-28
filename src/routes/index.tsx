@@ -10,8 +10,15 @@ import {
   TextInput,
 } from "@/components/newsletter/Shell";
 import { DraftBlock, SectionInputBlock } from "@/components/newsletter/SectionBlock";
-import { newIssue, useIssues, useProfile } from "@/lib/newsletter/store";
 import {
+  addRepeatableInstance,
+  deriveUpcomingEventsSeed,
+  newIssue,
+  useIssues,
+  useProfile,
+} from "@/lib/newsletter/store";
+import {
+  blockKey,
   wordCount,
   type DraftSection,
   type InputBlock,
@@ -118,27 +125,54 @@ function Workspace() {
   const hasDraft = issue.draft.length > 0;
   const locked = issue.status === "finalized";
 
-  const setBlock = (next: InputBlock) =>
-    save({
-      ...issue,
-      input: issue.input.map((b) => (b.section_id === next.section_id ? next : b)),
-    });
+  const setBlock = (next: InputBlock) => {
+    let input = issue.input.map((b) => (blockKey(b) === blockKey(next) ? next : b));
+
+    // Seed "Upcoming Events"-style narrative blocks from a structured calendar
+    // block's rows, unless the editor has hand-edited the target.
+    if (next.section_type === "structured" && next.rows) {
+      const seed = deriveUpcomingEventsSeed(next.rows);
+      const priorSeed = deriveUpcomingEventsSeed(
+        issue.input.find((b) => blockKey(b) === blockKey(next))?.rows ?? [],
+      );
+      input = input.map((b) => {
+        if (b.section_type !== "narrative" || b.section_id === next.section_id) return b;
+        const meta = profile.sections.find((s) => s.id === b.section_id);
+        if (!meta?.tone_notes?.toLowerCase().includes("calendar")) return b;
+        const current = b.raw_notes ?? "";
+        if (current && current !== priorSeed) return b; // hand-edited — leave it
+        return { ...b, raw_notes: seed };
+      });
+    }
+
+    save({ ...issue, input });
+  };
 
   const mergeDraft = (
-    returned: Array<{ section_id: string; heading?: string; text?: string; answer_key_text?: string }>,
+    returned: Array<{
+      section_id: string;
+      instance_id?: string;
+      heading?: string;
+      text?: string;
+      answer_key_text?: string;
+    }>,
   ) => {
-    const byId = new Map(returned.map((r) => [r.section_id, r]));
-    const existing = new Map(issue.draft.map((d) => [d.section_id, d]));
+    const byKey = new Map(
+      returned.map((r) => [r.instance_id ? `${r.section_id}:${r.instance_id}` : r.section_id, r]),
+    );
+    const existing = new Map(issue.draft.map((d) => [blockKey(d), d]));
 
     const sections: DraftSection[] = issue.input
       .filter((b) => !b.skipped)
       .map((b) => {
         const meta = profile.sections.find((s) => s.id === b.section_id);
-        const got = byId.get(b.section_id);
-        const prior = existing.get(b.section_id);
+        const key = blockKey(b);
+        const got = byKey.get(key) ?? byKey.get(b.section_id);
+        const prior = existing.get(key);
         const text = got?.text ?? prior?.text ?? "";
         return {
           section_id: b.section_id,
+          instance_id: b.instance_id,
           section_name: b.section_name,
           section_type: b.section_type,
           heading: got?.heading ?? prior?.heading,
@@ -168,12 +202,24 @@ function Workspace() {
     }
   };
 
-  const onRegenerate = async (sectionId: string) => {
+  const onRegenerate = async (draft: DraftSection) => {
     setError(null);
-    setBusySection(sectionId);
+    const key = blockKey(draft);
+    setBusySection(key);
     try {
+      const blocks = issue.input.map((b) =>
+        blockKey(b) === key
+          ? { ...b, previous_text: draft.text, previous_answer_key_text: draft.answer_key_text }
+          : b,
+      );
       const result = await runRegenerate({
-        data: { issue_name: issue.name, profile, blocks: issue.input, section_id: sectionId },
+        data: {
+          issue_name: issue.name,
+          profile,
+          blocks,
+          section_id: draft.section_id,
+          instance_id: draft.instance_id,
+        },
       });
       mergeDraft(result);
     } catch (e) {
@@ -185,11 +231,16 @@ function Workspace() {
 
   const fullText = () =>
     issue.draft
-      .map((d) =>
-        [d.heading ?? d.section_name, d.text, d.answer_key_text ? `Answer key: ${d.answer_key_text}` : ""]
+      .map((d) => {
+        const meta = profile.sections.find((s) => s.id === d.section_id);
+        const body =
+          d.section_type === "template_slot"
+            ? [meta?.template_opener, d.text, meta?.template_closer].filter(Boolean).join("\n\n")
+            : d.text;
+        return [d.heading ?? d.section_name, body, d.answer_key_text ? `Answer key: ${d.answer_key_text}` : ""]
           .filter(Boolean)
-          .join("\n\n"),
-      )
+          .join("\n\n");
+      })
       .join("\n\n———\n\n");
 
   const download = (ext: "txt" | "doc") => {
@@ -213,6 +264,8 @@ function Workspace() {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  const repeatableSections = profile.sections.filter((s) => s.repeatable);
 
   return (
     <Shell
@@ -279,21 +332,22 @@ function Workspace() {
           <div className="mt-3 space-y-3">
             {issue.draft.map((d) => (
               <DraftBlock
-                key={d.section_id}
+                key={blockKey(d)}
                 section={d}
-                rawInput={issue.input.find((b) => b.section_id === d.section_id)}
-                busy={busySection === d.section_id || generating}
+                rawInput={issue.input.find((b) => blockKey(b) === blockKey(d))}
+                meta={profile.sections.find((s) => s.id === d.section_id)}
+                busy={busySection === blockKey(d) || generating}
                 onEdit={(text) =>
                   save({
                     ...issue,
                     draft: issue.draft.map((s) =>
-                      s.section_id === d.section_id
+                      blockKey(s) === blockKey(d)
                         ? { ...s, text, word_count: wordCount(text) }
                         : s,
                     ),
                   })
                 }
-                onRegenerate={() => onRegenerate(d.section_id)}
+                onRegenerate={() => onRegenerate(d)}
               />
             ))}
           </div>
@@ -304,12 +358,36 @@ function Workspace() {
       <div className="mt-3 space-y-3">
         {issue.input.map((b) => (
           <SectionInputBlock
-            key={b.section_id}
+            key={blockKey(b)}
             block={b}
             meta={profile.sections.find((s) => s.id === b.section_id)}
             onChange={setBlock}
+            onRemove={
+              b.instance_id
+                ? () =>
+                    save({
+                      ...issue,
+                      input: issue.input.filter((x) => blockKey(x) !== blockKey(b)),
+                      draft: issue.draft.filter((x) => blockKey(x) !== blockKey(b)),
+                    })
+                : undefined
+            }
           />
         ))}
+        {repeatableSections.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {repeatableSections.map((s) => (
+              <GhostButton
+                key={s.id}
+                onClick={() =>
+                  save({ ...issue, input: [...issue.input, addRepeatableInstance(s)] })
+                }
+              >
+                + Add another {s.name}
+              </GhostButton>
+            ))}
+          </div>
+        )}
       </div>
     </Shell>
   );

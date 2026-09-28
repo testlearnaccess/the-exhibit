@@ -44,10 +44,12 @@ export const Route = createFileRoute("/style")({
 
 const TYPES: SectionType[] = [
   "narrative",
-  "evergreen",
+  "template_slot",
+  "rotating_cta",
   "structured",
   "paired",
   "image_anchored",
+  "evergreen",
 ];
 
 function StylePage() {
@@ -80,6 +82,11 @@ function StylePage() {
           tone_notes: s.tone_notes,
           last_content: s.last_content,
           last_updated: s.last_content ? now : undefined,
+          template_opener: s.template_opener || undefined,
+          template_closer: s.template_closer || undefined,
+          column_labels: s.column_labels,
+          active_by_default: s.active_by_default ?? true,
+          repeatable: s.repeatable ?? false,
         })),
         updated_at: now,
       };
@@ -238,7 +245,36 @@ function StylePage() {
                   ))}
                 </div>
 
-                {(s.section_type === "narrative" || s.section_type === "image_anchored") && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSection({ ...s, active_by_default: s.active_by_default === false })
+                    }
+                    className={
+                      s.active_by_default !== false
+                        ? "rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent outline-1 -outline-offset-1 outline-accent/30"
+                        : "rounded-full bg-glass/60 px-2 py-0.5 text-[10px] text-mist outline-1 -outline-offset-1 outline-border"
+                    }
+                  >
+                    Every issue
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSection({ ...s, repeatable: !s.repeatable })}
+                    className={
+                      s.repeatable
+                        ? "rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent outline-1 -outline-offset-1 outline-accent/30"
+                        : "rounded-full bg-glass/60 px-2 py-0.5 text-[10px] text-mist outline-1 -outline-offset-1 outline-border"
+                    }
+                  >
+                    Repeatable
+                  </button>
+                </div>
+
+                {(s.section_type === "narrative" ||
+                  s.section_type === "image_anchored" ||
+                  s.section_type === "rotating_cta") && (
                   <div className="mt-2 flex items-center gap-2">
                     <span className="text-[11px] text-mist">Typical words</span>
                     <input
@@ -260,6 +296,45 @@ function StylePage() {
                     placeholder="Conventions for this section"
                   />
                 </div>
+
+                {s.section_type === "template_slot" && (
+                  <div className="mt-2 space-y-2">
+                    <p className="label-eyebrow text-mist">Fixed opener</p>
+                    <Field
+                      value={s.template_opener ?? ""}
+                      onChange={(v) => setSection({ ...s, template_opener: v })}
+                      rows={2}
+                    />
+                    <p className="label-eyebrow text-mist">Fixed closer</p>
+                    <Field
+                      value={s.template_closer ?? ""}
+                      onChange={(v) => setSection({ ...s, template_closer: v })}
+                      rows={2}
+                    />
+                  </div>
+                )}
+
+                {s.section_type === "structured" && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-[11px] text-mist">Columns</span>
+                    <div className="w-28">
+                      <TextInput
+                        value={s.column_labels?.[0] ?? "Date"}
+                        onChange={(v) =>
+                          setSection({ ...s, column_labels: [v, s.column_labels?.[1] ?? "Event"] })
+                        }
+                      />
+                    </div>
+                    <div className="w-28">
+                      <TextInput
+                        value={s.column_labels?.[1] ?? "Event"}
+                        onChange={(v) =>
+                          setSection({ ...s, column_labels: [s.column_labels?.[0] ?? "Date", v] })
+                        }
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {s.section_type === "evergreen" && (
                   <div className="mt-2">
@@ -303,7 +378,12 @@ function StylePage() {
                   ...profile,
                   sections: [
                     ...profile.sections,
-                    { id: uid(), name: "New section", section_type: "narrative" },
+                    {
+                      id: uid(),
+                      name: "New section",
+                      section_type: "narrative",
+                      active_by_default: true,
+                    },
                   ],
                 })
               }
